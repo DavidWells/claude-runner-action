@@ -1,0 +1,105 @@
+# Runs Claude Code for @claude mentions on Issues/PRs and workflow_dispatch via
+# DavidWells/claude-runner-action. Installed as .github/workflows/claude.yml.
+
+name: Claude Code
+
+on:
+  # Manual/programmatic trigger (git-ops dispatch sends these inputs)
+  workflow_dispatch:
+    inputs:
+      trigger_text:
+        description: 'Text to trigger Claude with'
+        required: true
+        type: string
+        default: '@claude'
+      actor:
+        description: 'Actor to trigger Claude'
+        required: true
+        type: string
+        default: 'david'
+      create_branch:
+        description: 'Create new branch (changes are pushed to a claude/dispatch-* branch and opened as a PR instead of landing on the default branch)'
+        required: false
+        type: boolean
+        default: true
+      notify_email:
+        description: 'Email address to send a result receipt to (via event bus → reply mailer)'
+        required: false
+        type: string
+        default: ''
+      in_reply_to:
+        description: 'Message-ID of the originating email, for reply threading'
+        required: false
+        type: string
+        default: ''
+      notify_subject:
+        description: 'Subject of the originating email, for reply threading'
+        required: false
+        type: string
+        default: ''
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+  issue_comment:
+    types: [created]
+
+# One run per Issue/PR
+concurrency:
+  group: claude-${{ github.repository }}-${{ github.event.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    # Cheap prefilter; the action checks sender, association and artifact markers
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.comment.body, '@claude') ||
+      contains(github.event.review.body, '@claude') ||
+      contains(github.event.pull_request.body, '@claude') ||
+      contains(github.event.issue.body, '@claude') ||
+      contains(github.event.issue.title, '@claude')
+    runs-on: ubuntu-latest
+    # Must exceed the Claude step timeout so finalize still runs after it
+    timeout-minutes: 60
+    # issues/issue_comment/pull_request_target get read-only cache tokens by
+    # default; saving the Claude session needs write. The action only saves for
+    # OWNER/MEMBER/COLLABORATOR triggers, limiting poisoning risk
+    cache-mode: write
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      discussions: write
+      actions: write
+      checks: write
+      statuses: write
+      pages: write
+      deployments: write
+      packages: write
+      security-events: write
+      repository-projects: write
+      id-token: write
+    steps:
+      - name: Run Claude
+        uses: DavidWells/claude-runner-action@v1
+        timeout-minutes: 50
+        with:
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude-github-token: ${{ secrets.GH_PAT }}
+          allowed-users: ${{ secrets.ALLOWED_USERS }}
+          # git-ops dispatches via GitHub App installation token, which acts as this bot
+          allowed-bots: 'custom-git-ops'
+          event-bus-url: ${{ secrets.EVENT_BUS_URL }}
+          event-bus-api-key: ${{ secrets.EVENT_BUS_API_KEY }}
+
+      - name: Finalize
+        if: always()
+        uses: DavidWells/claude-runner-action/finalize@v1
+        with:
+          event-bus-url: ${{ secrets.EVENT_BUS_URL }}
+          event-bus-api-key: ${{ secrets.EVENT_BUS_API_KEY }}

@@ -1,0 +1,154 @@
+# Cleanup for a claude-runner-action run; call with if: always() right after it. Saves the
+# session, pushes unfinished work, uploads the transcript, publishes dispatch results, updates the status comment.
+name: 'Claude Runner: finalize'
+description: 'Save the Claude session, push unfinished work and report the outcome of a Claude Runner run'
+author: 'David Wells'
+branding:
+  icon: 'check-circle'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'Token for status comments (same as the main action github-token)'
+    required: false
+    default: ${{ github.token }}
+  event-bus-url:
+    description: 'Event bus base URL for dispatch result events. Empty disables publishing'
+    required: false
+    default: ''
+  event-bus-api-key:
+    description: 'Event bus API key'
+    required: false
+    default: ''
+
+outputs:
+  outcome:
+    description: 'Claude outcome as finalize resolved it: success, failure or skipped'
+    value: ${{ steps.outcome.outputs.outcome }}
+
+runs:
+  using: composite
+  steps:
+    # A run that started Claude but recorded no outcome was cut short by the
+    # caller's timeout-minutes or a cancel
+    - name: Resolve outcome
+      id: outcome
+      if: always()
+      shell: bash
+      run: |
+        if [ "${CLAUDE_RUNNER_CLAUDE_STARTED:-}" != "true" ]; then
+          OUTCOME=skipped
+        else
+          OUTCOME="${CLAUDE_RUNNER_CLAUDE_OUTCOME:-failure}"
+        fi
+        echo "Claude outcome: $OUTCOME"
+        echo "outcome=$OUTCOME" >> "$GITHUB_OUTPUT"
+
+    # Caches this run's session so the next run on this Issue/PR resumes it,
+    # including after a timeout, failure or cancel
+    - name: Save Claude session
+      if: always() && env.CLAUDE_SESSION_CACHE_SCOPE != ''
+      continue-on-error: true
+      uses: DavidWells/claude-code-session-cache/save@73b5fe29ebf4e3beedbf3e30ac5e2d94861aedc2
+
+    # Commit whatever Claude left behind and push it so a follow-up run (which
+    # resumes the session) starts from it
+    - name: Push unfinished work
+      id: wip
+      if: always() && steps.outcome.outputs.outcome != 'success' && steps.outcome.outputs.outcome != 'skipped'
+      continue-on-error: true
+      shell: bash
+      env:
+        START_SHA: ${{ env.CLAUDE_RUNNER_HEAD_SHA || github.sha }}
+        HEAD_REF: ${{ env.CLAUDE_RUNNER_HEAD_REF }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        RUN_ID: ${{ github.run_id }}
+        CLAUDE_OUTCOME: ${{ steps.outcome.outputs.outcome }}
+      run: bash "$GITHUB_ACTION_PATH/../scripts/wip-push.sh"
+
+    # Full session transcript for auditing what Claude did, success or not
+    - name: Upload Claude transcript
+      if: always() && steps.outcome.outputs.outcome != 'skipped'
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: claude-transcript-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ~/.claude/projects/*/*.jsonl
+        include-hidden-files: true
+        if-no-files-found: ignore
+        retention-days: 14
+
+    # Dispatch runs that carry notify_* inputs publish their outcome so the reply
+    # mailer can email the sender a threaded receipt
+    - name: Publish dispatch result
+      if: always() && env.CLAUDE_RUNNER_DISPATCH_BRANCH != '' && github.event.inputs.notify_email != ''
+      continue-on-error: true
+      shell: bash
+      env:
+        EVENT_BUS_URL: ${{ inputs.event-bus-url }}
+        EVENT_BUS_API_KEY: ${{ inputs.event-bus-api-key }}
+        CLAUDE_OUTCOME: ${{ steps.outcome.outputs.outcome }}
+        NOTIFY_EMAIL: ${{ github.event.inputs.notify_email }}
+        IN_REPLY_TO: ${{ github.event.inputs.in_reply_to }}
+        NOTIFY_SUBJECT: ${{ github.event.inputs.notify_subject }}
+      run: node "$GITHUB_ACTION_PATH/../src/publish-dispatch.js"
+
+    - name: Render status comment
+      id: comment
+      if: always() && env.CLAUDE_RUNNER_STATUS_COMMENT_ID != '' && env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}/..
+        OUTCOME: ${{ steps.outcome.outputs.outcome }}
+        WIP_BRANCH: ${{ steps.wip.outputs.branch }}
+        WIP_SHA: ${{ steps.wip.outputs.sha }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          require(`${process.env.ACTION_DIR}/src/comments.js`).run({
+            context,
+            core,
+            outcome: process.env.OUTCOME,
+            wipBranch: process.env.WIP_BRANCH,
+            wipSha: process.env.WIP_SHA,
+          })
+
+    - name: Update status comment
+      if: always() && steps.comment.outputs.comment-body != ''
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        token: ${{ inputs.github-token }}
+        issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
+        comment-id: ${{ env.CLAUDE_RUNNER_STATUS_COMMENT_ID }}
+        body: ${{ steps.comment.outputs.comment-body }}
+        edit-mode: replace
+
+    - name: Execution summary
+      if: always()
+      shell: bash
+      env:
+        OUTCOME: ${{ steps.outcome.outputs.outcome }}
+      run: |
+        echo "📊 ===== Execution Summary ====="
+        echo "Status: $OUTCOME"
+        echo "Context Type: $([ "${CLAUDE_RUNNER_IS_PR:-}" = "true" ] && echo PR || echo Issue)"
+        echo "Issue/PR: '#${CLAUDE_RUNNER_ISSUE_NUMBER:-}'"
+        echo "Branch: ${CLAUDE_RUNNER_HEAD_REF:-default}"
+        echo "Actor: $GITHUB_ACTOR"
+        echo "Event: $GITHUB_EVENT_NAME"
+        echo "Project: ${CLAUDE_RUNNER_FRAMEWORK:-Unknown}"
+        echo "Files: ${CLAUDE_RUNNER_TOTAL_FILES:-0}"
+        echo ""
+        echo "🔧 === Auto PR Creation Result ==="
+        echo "Has Changes: ${CLAUDE_RUNNER_HAS_CHANGES:-N/A}"
+        echo "Auto PR Number: ${CLAUDE_RUNNER_AUTO_PR_NUMBER:-N/A}"
+        echo "Auto PR URL: ${CLAUDE_RUNNER_AUTO_PR_URL:-N/A}"
+        echo "Branch Name: ${CLAUDE_RUNNER_AUTO_PR_BRANCH:-N/A}"
+        echo "Auto PR Error: ${CLAUDE_RUNNER_AUTO_PR_ERROR:-None}"
+        echo ""
+        echo "🚀 === Repository Management Result ==="
+        echo "Management Success: ${CLAUDE_RUNNER_MANAGEMENT_SUCCESS:-N/A}"
+        echo "Management Error: ${CLAUDE_RUNNER_MANAGEMENT_ERROR:-None}"
+        echo ""
+        echo "Timestamp: $(date -u)"
+        echo "=============================="

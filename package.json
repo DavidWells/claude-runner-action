@@ -1,0 +1,20 @@
+{
+  "name": "claude-runner-action",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action that runs Claude Code from @claude mentions on Issues/PRs and workflow_dispatch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavidWells/claude-runner-action"
+  },
+  "scripts": {
+    "test": "uvu test",
+    "lint": "actionlint -ignore 'unexpected key \"cache-mode\"' workflow-templates/claude.yml .github/workflows/*.yml && shellcheck scripts/*.sh"
+  },
+  "author": "David Wells",
+  "license": "MIT",
+  "devDependencies": {
+    "uvu": "^0.5.6",
+    "yaml": "^2.9.1"
+  }
+}

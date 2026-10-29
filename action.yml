@@ -1,0 +1,325 @@
+# Runs Claude Code for @claude mentions on Issues/PRs and workflow_dispatch: gates the
+# trigger, runs Claude, opens PRs. Pair with ./finalize (if: always()) for cleanup and status.
+name: 'Claude Runner'
+description: 'Run Claude Code from @claude mentions on Issues and PRs, or workflow_dispatch, and open PRs for its changes'
+author: 'David Wells'
+branding:
+  icon: 'cpu'
+  color: 'orange'
+
+inputs:
+  claude-code-oauth-token:
+    description: 'Claude Code OAuth token (CLAUDE_CODE_OAUTH_TOKEN)'
+    required: true
+  github-token:
+    description: 'Token for checkout, status comments and repository API calls'
+    required: false
+    default: ${{ github.token }}
+  claude-github-token:
+    description: 'Token Claude and dispatch PRs act with (e.g. a PAT). Empty uses github-token'
+    required: false
+    default: ''
+  allowed-users:
+    description: 'Comma-separated usernames allowed to dispatch runs. Empty allows anyone who can dispatch'
+    required: false
+    default: ''
+  allowed-bots:
+    description: 'Bot actors claude-code-action accepts, e.g. a GitHub App that dispatches runs'
+    required: false
+    default: ''
+  event-bus-url:
+    description: 'Event bus base URL for claude.job.* events. Empty disables publishing'
+    required: false
+    default: ''
+  event-bus-api-key:
+    description: 'Event bus API key'
+    required: false
+    default: ''
+
+outputs:
+  claude-outcome:
+    description: 'Outcome of the Claude step: success, failure or skipped'
+    value: ${{ steps.claude.outcome }}
+  branch-name:
+    description: 'Branch Claude pushed for an Issue, if any'
+    value: ${{ steps.claude.outputs.branch_name }}
+
+runs:
+  using: composite
+  steps:
+    ######################
+    # Gate
+    ######################
+    - name: Check trigger
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          require(`${process.env.ACTION_DIR}/src/gate.js`).run({ context, core })
+
+    - name: Check dispatch permissions
+      if: env.CLAUDE_RUNNER_AUTHORIZED == 'true' && github.event_name == 'workflow_dispatch'
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}
+        ALLOWED_USERS: ${{ inputs.allowed-users }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          await require(`${process.env.ACTION_DIR}/src/permissions.js`).run({ github, context, core, allowedUsers: process.env.ALLOWED_USERS })
+
+    - name: Get context information
+      if: env.CLAUDE_RUNNER_AUTHORIZED == 'true'
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          await require(`${process.env.ACTION_DIR}/src/context.js`).run({ github, context, core })
+
+    - name: Find existing status comment
+      id: find_comment
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch'
+      uses: peter-evans/find-comment@v3
+      with:
+        token: ${{ inputs.github-token }}
+        issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
+        comment-author: 'github-actions[bot]'
+        body-includes: '<!-- claude-run-status -->'
+
+    - name: Create in-progress status comment
+      id: create_comment
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch' && steps.find_comment.outputs.comment-id == ''
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        token: ${{ inputs.github-token }}
+        issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
+        body: |
+          Claude Code is running... ⏳
+          <!-- claude-run-status -->
+
+    - name: Record status comment
+      if: steps.find_comment.outputs.comment-id || steps.create_comment.outputs.comment-id
+      shell: bash
+      env:
+        COMMENT_ID: ${{ steps.find_comment.outputs.comment-id || steps.create_comment.outputs.comment-id }}
+      run: echo "CLAUDE_RUNNER_STATUS_COMMENT_ID=$COMMENT_ID" >> "$GITHUB_ENV"
+
+    ######################
+    # Prepare workspace
+    ######################
+    - name: Checkout repository
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
+      uses: actions/checkout@v4
+      with:
+        # The feature branch for PRs, or the default branch for Issues
+        ref: ${{ env.CLAUDE_RUNNER_HEAD_SHA || github.ref }}
+        fetch-depth: ${{ env.CLAUDE_RUNNER_IS_PR == 'true' && 0 || 1 }}
+        token: ${{ inputs.github-token }}
+
+    - name: Select model
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
+      shell: bash
+      run: |
+        echo "🔍 Event: $GITHUB_EVENT_NAME | Actor: $GITHUB_ACTOR | Repository: $GITHUB_REPOSITORY"
+        echo "Issue: $CLAUDE_RUNNER_ISSUE_NUMBER | Is PR: $CLAUDE_RUNNER_IS_PR | PR: $CLAUDE_RUNNER_PR_NUMBER"
+        echo "Head: $CLAUDE_RUNNER_HEAD_REF ($CLAUDE_RUNNER_HEAD_SHA) | Base: $CLAUDE_RUNNER_BASE_REF | Has linked PR: $CLAUDE_RUNNER_HAS_LINKED_PR"
+        node "$GITHUB_ACTION_PATH/src/model.js"
+
+    - name: Fetch base branch (PR only)
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && env.CLAUDE_RUNNER_IS_PR == 'true' && env.CLAUDE_RUNNER_BASE_REF != ''
+      shell: bash
+      run: |
+        echo "📥 Fetching base branch: $CLAUDE_RUNNER_BASE_REF"
+        git fetch origin "$CLAUDE_RUNNER_BASE_REF:$CLAUDE_RUNNER_BASE_REF"
+        echo "📋 Changed files:"
+        git diff --name-only "origin/$CLAUDE_RUNNER_BASE_REF..HEAD" || echo "Failed to get diff"
+        echo "📊 Change statistics:"
+        git diff --stat "origin/$CLAUDE_RUNNER_BASE_REF..HEAD" || echo "Failed to get stats"
+
+    - name: Get project information
+      id: project-info
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/project-info.sh"
+
+    # Dispatch runs with create_branch work on a branch so changes never land
+    # directly on the default branch
+    - name: Create dispatch branch
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.create_branch) == 'true'
+      shell: bash
+      env:
+        BRANCH_NAME: claude/dispatch-${{ github.run_id }}
+      run: |
+        git checkout -b "$BRANCH_NAME"
+        echo "🌿 Working on branch: $BRANCH_NAME"
+        echo "CLAUDE_RUNNER_DISPATCH_BRANCH=$BRANCH_NAME" >> "$GITHUB_ENV"
+
+    # Restores the session an earlier run left on this Issue/PR and outputs
+    # "--resume <id>"; finalize saves this run's session
+    - name: Restore Claude session
+      id: session
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
+      continue-on-error: true
+      uses: DavidWells/claude-code-session-cache/restore@73b5fe29ebf4e3beedbf3e30ac5e2d94861aedc2
+      with:
+        scope: ${{ env.CLAUDE_RUNNER_IS_PR == 'true' && 'pr' || 'issue' }}-${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
+
+    ######################
+    # Claude
+    ######################
+    - name: Mark Claude started
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
+      shell: bash
+      run: echo "CLAUDE_RUNNER_CLAUDE_STARTED=true" >> "$GITHUB_ENV"
+
+    - name: Run Claude Code
+      id: claude
+      if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
+      continue-on-error: true
+      uses: anthropics/claude-code-action@main
+      with:
+        claude_code_oauth_token: ${{ inputs.claude-code-oauth-token }}
+        github_token: ${{ inputs.claude-github-token || inputs.github-token }}
+        allowed_bots: ${{ inputs.allowed-bots }}
+        settings: |
+          {
+            "permissions": {
+              "allowedTools": [
+                "Edit", "View", "Replace", "Write", "Create",
+                "BatchTool", "GlobTool", "GrepTool", "NotebookEditCell",
+                "Bash(git:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(yarn:*)",
+                "Bash(python:*)", "Bash(bun:*)", "Bash(pnpm:*)",
+                "Bash(docker:*)", "Bash(make:*)", "Bash(cargo:*)", "Bash(go:*)",
+                "Bash(ls:*)", "Bash(cat:*)", "Bash(echo:*)", "Bash(curl:*)",
+                "mcp__*"
+              ],
+              "deny": [
+                "Bash(sudo:*)",
+                "Bash(rm -rf /)"
+              ]
+            }
+          }
+        claude_args: |
+          --model ${{ env.CLAUDE_RUNNER_MODEL }} --dangerously-skip-permissions ${{ steps.session.outputs.resume-args }}
+        # Dispatch runs use agent mode with the trigger text as prompt; mentions use tag mode
+        mode: ${{ github.event_name == 'workflow_dispatch' && 'agent' || 'tag' }}
+        prompt: ${{ github.event_name == 'workflow_dispatch' && env.CLAUDE_RUNNER_TRIGGER_TEXT || '' }}
+        # Lets Claude read CI results on PRs
+        additional_permissions: |
+          actions: read
+      env:
+        GITHUB_CONTEXT_TYPE: ${{ env.CLAUDE_RUNNER_IS_PR == 'true' && 'PR' || 'ISSUE' }}
+        ISSUE_NUMBER: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
+        PR_NUMBER: ${{ env.CLAUDE_RUNNER_PR_NUMBER }}
+        BASE_BRANCH: ${{ env.CLAUDE_RUNNER_BASE_REF }}
+        HEAD_BRANCH: ${{ env.CLAUDE_RUNNER_HEAD_REF }}
+        HEAD_SHA: ${{ env.CLAUDE_RUNNER_HEAD_SHA }}
+        TRIGGER_TEXT: ${{ env.CLAUDE_RUNNER_TRIGGER_TEXT }}
+        PROJECT_TYPE: ${{ steps.project-info.outputs.project-type }}
+        PROJECT_FRAMEWORK: ${{ steps.project-info.outputs.framework }}
+        TOTAL_FILES: ${{ steps.project-info.outputs.total-files }}
+        REPOSITORY_NAME: ${{ github.repository }}
+        CLAUDE_PERMISSIONS_LEVEL: "ENHANCED"
+        REPO_ADMIN_MODE: "true"
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REPOSITORY_OWNER: ${{ github.repository_owner }}
+        REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+        REPOSITORY_FORK: ${{ github.event.repository.fork }}
+        WORKFLOW_RUN_ID: ${{ github.run_id }}
+        WORKFLOW_RUN_NUMBER: ${{ github.run_number }}
+        COMMIT_SHA: ${{ github.sha }}
+        REF_NAME: ${{ github.ref_name }}
+        CAN_CREATE_RELEASES: "true"
+        CAN_MANAGE_LABELS: "true"
+        CAN_MANAGE_MILESTONES: "true"
+        CAN_MANAGE_PROJECTS: "true"
+        CAN_MANAGE_WIKI: "true"
+        CAN_MANAGE_PAGES: "true"
+        CAN_MANAGE_DEPLOYMENTS: "true"
+        CAN_MANAGE_SECURITY: "true"
+        CAN_MANAGE_PACKAGES: "true"
+        CAN_MANAGE_ACTIONS: "true"
+
+    # Recorded right away so finalize sees the outcome even if a later step
+    # here is cut off by the caller's timeout-minutes
+    - name: Record Claude outcome
+      if: always() && env.CLAUDE_RUNNER_CLAUDE_STARTED == 'true'
+      shell: bash
+      env:
+        OUTCOME: ${{ steps.claude.outcome }}
+        FRAMEWORK: ${{ steps.project-info.outputs.framework }}
+        TOTAL_FILES: ${{ steps.project-info.outputs.total-files }}
+      run: |
+        {
+          echo "CLAUDE_RUNNER_CLAUDE_OUTCOME=$OUTCOME"
+          echo "CLAUDE_RUNNER_FRAMEWORK=$FRAMEWORK"
+          echo "CLAUDE_RUNNER_TOTAL_FILES=$TOTAL_FILES"
+        } >> "$GITHUB_ENV"
+
+    ######################
+    # Results
+    ######################
+    # Dispatch-branch runs: commit, push and open a PR when there are changes
+    - name: Push dispatch branch and open PR
+      if: steps.claude.outcome == 'success' && env.CLAUDE_RUNNER_DISPATCH_BRANCH != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.claude-github-token || inputs.github-token }}
+        BRANCH_NAME: ${{ env.CLAUDE_RUNNER_DISPATCH_BRANCH }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        TRIGGER_TEXT: ${{ env.CLAUDE_RUNNER_TRIGGER_TEXT }}
+        EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/dispatch-pr.sh"
+
+    - name: Run repository management
+      if: steps.claude.outcome == 'success' && env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          await require(`${process.env.ACTION_DIR}/src/repo-management.js`).run({ github, context, core })
+
+    - name: Check for changes
+      id: check-changes
+      if: steps.claude.outcome == 'success' && env.CLAUDE_RUNNER_IS_PR == 'false' && steps.claude.outputs.branch_name != ''
+      shell: bash
+      env:
+        BRANCH_NAME: ${{ steps.claude.outputs.branch_name }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/check-changes.sh"
+
+    - name: Create or update pull request
+      if: steps.check-changes.outputs.has-changes == 'true'
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}
+        BRANCH_NAME: ${{ steps.claude.outputs.branch_name }}
+        EVENT_BUS_URL: ${{ inputs.event-bus-url }}
+        EVENT_BUS_API_KEY: ${{ inputs.event-bus-api-key }}
+        CLAUDE_RUNNER_HAS_CHANGES: 'true'
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          await require(`${process.env.ACTION_DIR}/src/auto-pr.js`).run({
+            github,
+            context,
+            core,
+            branchName: process.env.BRANCH_NAME,
+            eventBusUrl: process.env.EVENT_BUS_URL,
+            eventBusApiKey: process.env.EVENT_BUS_API_KEY,
+          })
+
+    - name: Record results
+      if: always() && steps.check-changes.outputs.has-changes != ''
+      shell: bash
+      env:
+        HAS_CHANGES: ${{ steps.check-changes.outputs.has-changes }}
+      run: echo "CLAUDE_RUNNER_HAS_CHANGES=$HAS_CHANGES" >> "$GITHUB_ENV"

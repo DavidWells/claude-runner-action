@@ -1,0 +1,33 @@
+# Unit tests for the action's scripts plus lint of the caller template and
+# bash step scripts.
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+        with:
+          files: 'workflow-templates/claude.yml, .github/workflows/*.yml'
+          flags: '-ignore "unexpected key \"cache-mode\""'
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
