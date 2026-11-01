@@ -61,10 +61,19 @@ Keep the job `timeout-minutes` above the Claude step's so finalize has time to r
 A run starts when:
 
 - **workflow_dispatch** with `trigger_text` and `actor`. With `create_branch`, changes go to `claude/dispatch-<run_id>` and open a PR. `notify_email`/`in_reply_to`/`notify_subject` publish a result receipt to the event bus.
-- **issues / issue_comment / PR review (comment)** mention `@claude` and the sender is the repo owner or an `OWNER`/`MEMBER`/`COLLABORATOR`.
-- **pull_request_target** body mentions `@claude` and the PR is same-repo or from a trusted author.
+- **issues** mention `@claude` and the issue's author is an `OWNER`/`MEMBER`/`COLLABORATOR`.
+- **issue_comment / PR review (comment)** mention `@claude` and the sender is the repo owner or an `OWNER`/`MEMBER`/`COLLABORATOR`.
+- **pull_request_target** body mentions `@claude` and the PR is same-repo.
 
 Bodies stamped `claude-dispatch-artifact` never trigger, so PRs Claude opens don't re-trigger it. Issues that already have a linked PR are skipped.
+
+PRs from forks never run, whoever asks: their code would be checked out next to the run's secrets.
+
+## Security
+
+Claude runs with `--dangerously-skip-permissions` and the job's tokens, so anything it reads (issue text, PR diffs, repo files) can steer it. Only install this where you trust the people who can trigger it, and scope `GH_PAT` as narrowly as you can.
+
+On public repos, transcripts and sessions are not stored, because artifacts and caches are readable outside the repo. A timed-out run there still pushes its work but can't resume its session. Run logs are public too, including dispatch inputs such as `trigger_text` and `notify_email`.
 
 Mention `fable`, `opus`, `haiku` or `sonnet` in the trigger text to pick a model (default `opus`).
 

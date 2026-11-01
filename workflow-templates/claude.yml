@@ -74,15 +74,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-      discussions: write
       actions: write
-      checks: write
-      statuses: write
-      pages: write
-      deployments: write
-      packages: write
-      security-events: write
-      repository-projects: write
       id-token: write
     steps:
       - name: Run Claude

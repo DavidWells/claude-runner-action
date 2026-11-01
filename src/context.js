@@ -82,12 +82,23 @@ function linkedPullRequests(timeline) {
 }
 
 /**
- * Issues that already have a linked PR are left alone.
- * @param {{ isPR: boolean, hasLinkedPR: boolean }} params
+ * Whether a PR's head lives outside this repo. Its code is untrusted and would
+ * be checked out next to the run's secrets. A deleted fork has no head repo.
+ * @param {any} pr pull_request payload object
+ * @param {string} repoFullName
  * @returns {boolean}
  */
-function shouldContinue({ isPR, hasLinkedPR }) {
-  return !(!isPR && hasLinkedPR)
+function isForkHead(pr, repoFullName) {
+  return pr.head?.repo?.full_name !== repoFullName
+}
+
+/**
+ * Fork PRs and issues that already have a linked PR are left alone.
+ * @param {{ isPR: boolean, hasLinkedPR: boolean, isFork?: boolean }} params
+ * @returns {boolean}
+ */
+function shouldContinue({ isPR, hasLinkedPR, isFork = false }) {
+  return !isFork && !(!isPR && hasLinkedPR)
 }
 
 /**
@@ -97,6 +108,7 @@ function shouldContinue({ isPR, hasLinkedPR }) {
 async function run({ github, context, core }) {
   const ctx = contextFromPayload(context.eventName, context.payload)
   let hasLinkedPR = false
+  let pullRequest = context.payload.pull_request
 
   if (context.eventName === 'issue_comment') {
     const issueNumber = Number(ctx.issueNumber)
@@ -104,6 +116,7 @@ async function run({ github, context, core }) {
       try {
         const pr = await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: issueNumber })
         Object.assign(ctx, fromPullRequest(pr.data, ctx.triggerText))
+        pullRequest = pr.data
         console.log(JSON.stringify({ code: 'claude-workflow.015' }))
       } catch (error) {
         // Treat as a regular issue when the PR can't be read
@@ -127,9 +140,10 @@ async function run({ github, context, core }) {
     }
   }
 
-  const proceed = shouldContinue({ isPR: ctx.isPR, hasLinkedPR })
+  const isFork = Boolean(pullRequest) && isForkHead(pullRequest, context.payload.repository.full_name)
+  const proceed = shouldContinue({ isPR: ctx.isPR, hasLinkedPR, isFork })
   if (!proceed) {
-    core.notice('Issue already has a linked PR; skipping run')
+    core.notice(isFork ? 'PR head is a fork; skipping run' : 'Issue already has a linked PR; skipping run')
   }
 
   core.exportVariable('CLAUDE_RUNNER_ISSUE_NUMBER', ctx.issueNumber)
@@ -144,4 +158,4 @@ async function run({ github, context, core }) {
   console.log(JSON.stringify({ code: 'claude-workflow.022' }))
 }
 
-module.exports = { ensureMention, contextFromPayload, linkedPullRequests, shouldContinue, run }
+module.exports = { ensureMention, contextFromPayload, linkedPullRequests, isForkHead, shouldContinue, run }

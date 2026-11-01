@@ -38,7 +38,7 @@ function isAuthorizedTrigger(eventName, payload, repoOwner) {
     case 'pull_request_target': {
       const pr = payload.pull_request || {}
       const sameRepo = pr.head?.repo?.full_name === payload.repository?.full_name
-      return (sameRepo || isTrusted(pr.author_association)) &&
+      return sameRepo &&
         contains(pr.body, '@claude') &&
         !contains(pr.body, ARTIFACT_MARKER)
     }
@@ -52,7 +52,9 @@ function isAuthorizedTrigger(eventName, payload, repoOwner) {
 
     case 'issues': {
       const issue = payload.issue || {}
-      return (isOwner || isTrusted(issue.author_association)) &&
+      // The issue's author, not the sender: `assigned` fires with the assigner as
+      // sender while the text Claude runs on is still the author's
+      return isTrusted(issue.author_association) &&
         (contains(issue.body, '@claude') || contains(issue.title, '@claude')) &&
         !contains(issue.body, ARTIFACT_MARKER)
     }

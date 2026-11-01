@@ -2,7 +2,7 @@
 // linked-PR detection and the dispatch permission helpers.
 const { test } = require('uvu')
 const assert = require('uvu/assert')
-const { ensureMention, contextFromPayload, linkedPullRequests, shouldContinue } = require('../src/context')
+const { ensureMention, contextFromPayload, linkedPullRequests, shouldContinue, isForkHead, run } = require('../src/context')
 const { parseAllowedUsers, hasWriteAccess } = require('../src/permissions')
 const { selectModel } = require('../src/model')
 
@@ -58,6 +58,53 @@ test('shouldContinue stops only issues that already have a linked PR', () => {
   assert.is(shouldContinue({ isPR: false, hasLinkedPR: true }), false)
   assert.is(shouldContinue({ isPR: false, hasLinkedPR: false }), true)
   assert.is(shouldContinue({ isPR: true, hasLinkedPR: true }), true)
+})
+
+test('shouldContinue stops PRs whose head is a fork', () => {
+  assert.is(shouldContinue({ isPR: true, hasLinkedPR: false, isFork: true }), false)
+  assert.is(shouldContinue({ isPR: true, hasLinkedPR: false, isFork: false }), true)
+})
+
+test('isForkHead compares head repo to this repo; deleted forks count as forks', () => {
+  assert.is(isForkHead({ head: { repo: { full_name: 'o/r' } } }, 'o/r'), false)
+  assert.is(isForkHead({ head: { repo: { full_name: 'evil/r' } } }, 'o/r'), true)
+  assert.is(isForkHead({ head: { repo: null } }, 'o/r'), true)
+})
+
+/**
+ * Runs context.run for a @claude comment on PR 7 and returns the exported env.
+ * @param {string} headRepo
+ * @returns {Promise<Record<string, string>>}
+ */
+async function runOnPrComment(headRepo) {
+  /** @type {Record<string, string>} */
+  const exported = {}
+  const notices = []
+  const github = { rest: { pulls: { get: async () => ({ data: {
+    number: 7, head: { ref: 'feat', sha: 'abc', repo: { full_name: headRepo } }, base: { ref: 'main' },
+  } }) } } }
+  const context = {
+    eventName: 'issue_comment',
+    repo: { owner: 'o', repo: 'r' },
+    payload: { repository: { full_name: 'o/r' }, issue: { number: 7, pull_request: {} }, comment: { body: '@claude go' } },
+  }
+  const core = { notice: (m) => notices.push(m), exportVariable: (k, v) => { exported[k] = v } }
+  const log = console.log
+  console.log = () => {}
+  try {
+    await run({ github, context, core })
+  } finally {
+    console.log = log
+  }
+  return exported
+}
+
+test('run: trusted comment on a fork PR does not continue', async () => {
+  assert.is((await runOnPrComment('evil/r')).CLAUDE_RUNNER_SHOULD_CONTINUE, 'false')
+})
+
+test('run: comment on a same-repo PR continues', async () => {
+  assert.is((await runOnPrComment('o/r')).CLAUDE_RUNNER_SHOULD_CONTINUE, 'true')
 })
 
 test('parseAllowedUsers splits and trims', () => {

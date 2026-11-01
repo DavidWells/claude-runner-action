@@ -55,4 +55,27 @@ for (const file of ACTIONS) {
   })
 }
 
+test('third-party actions are pinned to a commit SHA', () => {
+  for (const file of ACTIONS) {
+    const { doc } = load(file)
+    for (const step of doc.runs.steps) {
+      if (!step.uses || step.uses.startsWith('actions/')) continue
+      assert.match(step.uses, /@[0-9a-f]{40}$/, `${file}: ${step.uses}`)
+    }
+  }
+})
+
+test('transcripts and sessions are only stored for private repos', () => {
+  const { doc } = load('finalize/action.yml')
+  for (const name of ['Save Claude session', 'Upload Claude transcript']) {
+    const step = doc.runs.steps.find((/** @type {{ name: string }} */ s) => s.name === name)
+    assert.ok(step.if.includes('github.event.repository.private == true'), name)
+  }
+})
+
+test('caller template requests only the permissions the action uses', () => {
+  const { doc } = load('workflow-templates/claude.yml')
+  assert.equal(Object.keys(doc.jobs.claude.permissions).sort(), ['actions', 'contents', 'id-token', 'issues', 'pull-requests'])
+})
+
 test.run()

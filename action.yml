@@ -83,7 +83,7 @@ runs:
     - name: Find existing status comment
       id: find_comment
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch'
-      uses: peter-evans/find-comment@v3
+      uses: peter-evans/find-comment@3eae4d37986fb5a8592848f6a574fdf654e61f9e # v3
       with:
         token: ${{ inputs.github-token }}
         issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
@@ -93,7 +93,7 @@ runs:
     - name: Create in-progress status comment
       id: create_comment
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch' && steps.find_comment.outputs.comment-id == ''
-      uses: peter-evans/create-or-update-comment@v4
+      uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4
       with:
         token: ${{ inputs.github-token }}
         issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
@@ -180,7 +180,7 @@ runs:
       id: claude
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
       continue-on-error: true
-      uses: anthropics/claude-code-action@main
+      uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1
       with:
         claude_code_oauth_token: ${{ inputs.claude-code-oauth-token }}
         github_token: ${{ inputs.claude-github-token || inputs.github-token }}
@@ -206,7 +206,6 @@ runs:
         claude_args: |
           --model ${{ env.CLAUDE_RUNNER_MODEL }} --dangerously-skip-permissions ${{ steps.session.outputs.resume-args }}
         # Dispatch runs use agent mode with the trigger text as prompt; mentions use tag mode
-        mode: ${{ github.event_name == 'workflow_dispatch' && 'agent' || 'tag' }}
         prompt: ${{ github.event_name == 'workflow_dispatch' && env.CLAUDE_RUNNER_TRIGGER_TEXT || '' }}
         # Lets Claude read CI results on PRs
         additional_permissions: |
