@@ -1,0 +1,23 @@
+[
+  { "code": "claude-workflow.001", "source": "src/permissions.js", "message": "No allowed users configured, allowing anyone who can dispatch" },
+  { "code": "claude-workflow.003", "source": "src/permissions.js", "message": "Checking dispatch permissions for the actor" },
+  { "code": "claude-workflow.005", "source": "src/permissions.js", "message": "Actor is in the allowed list" },
+  { "code": "claude-workflow.007", "source": "src/permissions.js", "message": "Read the actor's collaborator permission level" },
+  { "code": "claude-workflow.008", "source": "src/permissions.js", "message": "Could not read collaborator permissions, trying org membership" },
+  { "code": "claude-workflow.009", "source": "src/permissions.js", "message": "Could not read org membership, denying" },
+  { "code": "claude-workflow.015", "source": "src/context.js", "message": "Comment is on a PR, loaded its refs" },
+  { "code": "claude-workflow.016", "source": "src/context.js", "message": "Could not read the PR, treating the comment as on an issue" },
+  { "code": "claude-workflow.017", "source": "src/context.js", "message": "Loaded the issue timeline" },
+  { "code": "claude-workflow.018", "source": "src/context.js", "message": "Checked the issue for linked PRs" },
+  { "code": "claude-workflow.020", "source": "src/context.js", "message": "Could not check the issue for linked PRs" },
+  { "code": "claude-workflow.022", "source": "src/context.js", "message": "Run context exported" },
+  { "code": "claude-workflow.029", "source": "src/labels.js", "message": "Applying labels" },
+  { "code": "claude-workflow.037", "source": "src/labels.js", "message": "Could not create or apply labels" },
+  { "code": "claude-workflow.038", "source": "src/auto-pr.js", "message": "Checking for an existing PR on Claude's branch" },
+  { "code": "claude-workflow.039", "source": "src/auto-pr.js", "message": "Found an existing PR, commenting instead of opening one" },
+  { "code": "claude-workflow.040", "source": "src/auto-pr.js", "message": "No existing PR, opening one" },
+  { "code": "claude-workflow.041", "source": "src/auto-pr.js", "message": "PR opened" },
+  { "code": "claude-workflow.042", "source": "src/auto-pr.js", "message": "Publishing claude.job.completed to the event bus" },
+  { "code": "claude-workflow.048", "source": "src/auto-pr.js", "message": "PR creation or update failed" },
+  { "code": "claude-workflow.049", "source": "src/auto-pr.js", "message": "Publishing claude.job.failed to the event bus" }
+]

@@ -1,5 +1,5 @@
 // Renders the sticky status comment a run leaves on its Issue/PR: in-progress,
-// success (auto PR, management summary) or failure (WIP branch, rerun tips).
+// success (auto PR) or failure (WIP branch, rerun tips).
 const STATUS_MARKER = '<!-- claude-run-status -->'
 
 const EVENT_ICONS = {
@@ -28,9 +28,6 @@ const EVENT_ICONS = {
  * @property {string} [autoPrNumber]
  * @property {string} [autoPrUrl]
  * @property {string} [autoPrBranch]
- * @property {boolean} [managementSuccess]
- * @property {string} [managementResults]
- * @property {string} [managementError]
  * @property {string} [wipBranch]
  * @property {string} [wipSha]
  */
@@ -67,33 +64,8 @@ function successComment(r) {
     message += `**📝 PR Changes:** [${prFilesUrl}](${prFilesUrl})\n`
   }
 
-  const management = managementSummary(r)
-  if (management.length > 0) {
-    message += `\n**🚀 Automated management executed:**\n`
-    message += management.join('\n') + '\n'
-  }
-
   message += `\n${STATUS_MARKER}`
   return message
-}
-
-/**
- * Up to two created/warning lines per management section.
- * @param {RunReport} r
- * @returns {string[]}
- */
-function managementSummary(r) {
-  if (!r.managementSuccess || !r.managementResults) return []
-  try {
-    const results = JSON.parse(r.managementResults)
-    const sections = ['labels', 'milestones', 'projects', 'security', 'wiki', 'pages', 'actions']
-    return sections.flatMap((section) => (results[section] || [])
-      .filter((/** @type {string} */ line) => line.includes('✅') || line.includes('⚠️'))
-      .slice(0, 2)
-      .map((/** @type {string} */ line) => `- ${line}`))
-  } catch (error) {
-    return []
-  }
 }
 
 /**
@@ -107,9 +79,6 @@ function failureComment(r) {
   message += `**📊 Error Info:** ${contextType} | \`${r.eventName}\` | @${r.actor}\n`
   message += `**🔗 Detailed Log:** [Actions run log](${r.serverUrl}/${r.owner}/${r.repo}/actions/runs/${r.runId})\n\n`
 
-  if (r.managementError) {
-    message += `⚠️ **Repository Management Error:** \`${r.managementError}\`\n\n`
-  }
   if (r.wipBranch) {
     message += `📦 **Unfinished work pushed:** \`${r.wipBranch}\` @ ${(r.wipSha || '').slice(0, 8)}. Mention \`@claude continue\` to resume the session from there.\n\n`
   }
@@ -161,9 +130,6 @@ function reportFromEnv(env, context, wip) {
     autoPrNumber: env.CLAUDE_RUNNER_AUTO_PR_NUMBER,
     autoPrUrl: env.CLAUDE_RUNNER_AUTO_PR_URL,
     autoPrBranch: env.CLAUDE_RUNNER_AUTO_PR_BRANCH,
-    managementSuccess: env.CLAUDE_RUNNER_MANAGEMENT_SUCCESS === 'true',
-    managementResults: env.CLAUDE_RUNNER_MANAGEMENT_RESULTS,
-    managementError: env.CLAUDE_RUNNER_MANAGEMENT_ERROR,
     wipBranch: wip.wipBranch,
     wipSha: wip.wipSha,
   }

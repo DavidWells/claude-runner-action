@@ -28,6 +28,6 @@ jobs:
         uses: raven-actions/actionlint@v2
         with:
           files: 'workflow-templates/claude.yml, .github/workflows/*.yml'
-          flags: '-ignore "unexpected key \"cache-mode\""'
+          flags: '-ignore cache-mode'
       - name: shellcheck
         run: shellcheck scripts/*.sh

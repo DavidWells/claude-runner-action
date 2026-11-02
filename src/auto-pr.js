@@ -78,7 +78,6 @@ async function run({ github, context, core, branchName, eventBusUrl, eventBusApi
       framework: env.CLAUDE_RUNNER_FRAMEWORK || '',
       totalFiles: env.CLAUDE_RUNNER_TOTAL_FILES || '',
       hasChanges: env.CLAUDE_RUNNER_HAS_CHANGES || '',
-      managementSuccess: env.CLAUDE_RUNNER_MANAGEMENT_SUCCESS || '',
     },
   }
 

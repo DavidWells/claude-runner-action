@@ -7,7 +7,7 @@ const path = require('path')
 const YAML = require('yaml')
 
 const ROOT = path.join(__dirname, '..')
-const ACTIONS = ['action.yml', 'finalize/action.yml']
+const ACTIONS = ['action.yml', 'finalize/action.yml', 'labels/action.yml']
 
 /**
  * @param {string} file
@@ -76,6 +76,25 @@ test('transcripts and sessions are only stored for private repos', () => {
 test('caller template requests only the permissions the action uses', () => {
   const { doc } = load('workflow-templates/claude.yml')
   assert.equal(Object.keys(doc.jobs.claude.permissions).sort(), ['actions', 'contents', 'id-token', 'issues', 'pull-requests'])
+})
+
+test('caller template runs Claude, labels on success, then finalizes', () => {
+  const { doc } = load('workflow-templates/claude.yml')
+  const steps = doc.jobs.claude.steps
+  assert.equal(steps.map((/** @type {{ uses: string }} */ s) => s.uses), [
+    'DavidWells/claude-runner-action@v1',
+    'DavidWells/claude-runner-action/labels@v1',
+    'DavidWells/claude-runner-action/finalize@v1',
+  ])
+  assert.is(steps[0].id, 'claude')
+  assert.is(steps[1].if, "steps.claude.outputs.claude-outcome == 'success'")
+  assert.is(steps[2].if, 'always()')
+})
+
+test('main action has no repository management', () => {
+  const { text } = load('action.yml')
+  assert.not.ok(/repo-management|CAN_MANAGE|REPO_ADMIN_MODE/.test(text))
+  assert.not.ok(fs.existsSync(path.join(ROOT, 'src/repo-management.js')))
 })
 
 test.run()

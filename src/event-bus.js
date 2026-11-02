@@ -22,7 +22,7 @@ async function publish({ url, apiKey, event }) {
     console.log('Event bus HTTP', response.status)
     return response.ok
   } catch (error) {
-    console.warn('⚠️ Event bus publish failed (non-fatal)', error instanceof Error ? error.message : error)
+    console.warn('⚠️ Event bus publish failed (non-fatal)')
     return false
   }
 }

@@ -1,11 +1,10 @@
 // Tests for what a run reports back: status comments, the auto-PR body, event
-// bus payloads and repository-management label/milestone choices.
+// bus payloads.
 const { test } = require('uvu')
 const assert = require('uvu/assert')
 const { successComment, failureComment, STATUS_MARKER } = require('../src/comments')
 const { pullRequestBody, jobEvent } = require('../src/auto-pr')
 const { dispatchResultEvent } = require('../src/publish-dispatch')
-const { autoLabels, currentMilestone } = require('../src/repo-management')
 
 const base = {
   owner: 'o',
@@ -46,20 +45,12 @@ test('successComment analysis-only and PR branch line', () => {
   assert.not.ok(pr.includes('Analysis only'))
 })
 
-test('successComment lists created/warning management results only', () => {
-  const managementResults = JSON.stringify({ labels: ['✅ Created: a', '📋 Exists: b', '✅ Created: c', '✅ Created: d'], pages: ['ℹ️ skipped'], security: ['⚠️ alert'] })
-  const body = successComment({ ...base, managementSuccess: true, managementResults })
-  assert.ok(body.includes('**🚀 Automated management executed:**\n- ✅ Created: a\n- ✅ Created: c\n- ⚠️ alert\n'))
-  assert.not.ok(successComment({ ...base, managementSuccess: true, managementResults: '{bad' }).includes('Automated management'))
-})
-
-test('failureComment mentions WIP branch and management error', () => {
-  const body = failureComment({ ...base, wipBranch: 'claude/wip-42', wipSha: '0123456789abcdef', managementError: 'boom' })
+test('failureComment mentions WIP branch', () => {
+  const body = failureComment({ ...base, wipBranch: 'claude/wip-42', wipSha: '0123456789abcdef' })
   assert.ok(body.startsWith('❌ **Claude Code execution failed**'))
   assert.ok(body.includes('An error occurred while processing Issue #5.'))
   assert.ok(body.includes('[Actions run log](https://github.com/o/r/actions/runs/42)'))
   assert.ok(body.includes('`claude/wip-42` @ 01234567'))
-  assert.ok(body.includes('⚠️ **Repository Management Error:** `boom`'))
   assert.ok(body.endsWith(STATUS_MARKER))
   assert.not.ok(failureComment(base).includes('Unfinished work'))
 })
@@ -100,17 +91,6 @@ test('dispatchResultEvent maps outcome to completed/failed', () => {
   })
   assert.is(dispatchResultEvent({ outcome: 'failure', prUrl: 'p' }).type, 'claude.job.failed')
   assert.is(dispatchResultEvent({ outcome: 'failure', prUrl: 'p' }).detail.results.prCreated, true)
-})
-
-test('autoLabels from trigger keywords', () => {
-  assert.equal(autoLabels('fix the thing'), ['claude-code', 'auto-generated'])
-  assert.equal(autoLabels('security performance technical debt document deploy'), ['claude-code', 'auto-generated', 'security-fix', 'performance', 'technical-debt', 'documentation', 'ci-cd'])
-})
-
-test('currentMilestone is YYYY-Mon due at month end', () => {
-  const m = currentMilestone(new Date(2026, 9, 29))
-  assert.is(m.title, '2026-Oct')
-  assert.is(m.dueOn, new Date(2026, 10, 0).toISOString())
 })
 
 test.run()

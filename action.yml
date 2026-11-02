@@ -222,8 +222,6 @@ runs:
         PROJECT_FRAMEWORK: ${{ steps.project-info.outputs.framework }}
         TOTAL_FILES: ${{ steps.project-info.outputs.total-files }}
         REPOSITORY_NAME: ${{ github.repository }}
-        CLAUDE_PERMISSIONS_LEVEL: "ENHANCED"
-        REPO_ADMIN_MODE: "true"
         GITHUB_TOKEN: ${{ inputs.github-token }}
         REPOSITORY_OWNER: ${{ github.repository_owner }}
         REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -233,16 +231,6 @@ runs:
         WORKFLOW_RUN_NUMBER: ${{ github.run_number }}
         COMMIT_SHA: ${{ github.sha }}
         REF_NAME: ${{ github.ref_name }}
-        CAN_CREATE_RELEASES: "true"
-        CAN_MANAGE_LABELS: "true"
-        CAN_MANAGE_MILESTONES: "true"
-        CAN_MANAGE_PROJECTS: "true"
-        CAN_MANAGE_WIKI: "true"
-        CAN_MANAGE_PAGES: "true"
-        CAN_MANAGE_DEPLOYMENTS: "true"
-        CAN_MANAGE_SECURITY: "true"
-        CAN_MANAGE_PACKAGES: "true"
-        CAN_MANAGE_ACTIONS: "true"
 
     # Recorded right away so finalize sees the outcome even if a later step
     # here is cut off by the caller's timeout-minutes
@@ -275,16 +263,6 @@ runs:
         EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: bash "$GITHUB_ACTION_PATH/scripts/dispatch-pr.sh"
-
-    - name: Run repository management
-      if: steps.claude.outcome == 'success' && env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
-      uses: actions/github-script@v7
-      env:
-        ACTION_DIR: ${{ github.action_path }}
-      with:
-        github-token: ${{ inputs.github-token }}
-        script: |
-          await require(`${process.env.ACTION_DIR}/src/repo-management.js`).run({ github, context, core })
 
     - name: Check for changes
       id: check-changes

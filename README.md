@@ -2,11 +2,12 @@
 
 Runs [Claude Code](https://github.com/anthropics/claude-code-action) from `@claude` mentions on Issues and PRs, or from `workflow_dispatch`, then opens PRs for its changes and reports back on the thread.
 
-Two actions, used as two steps:
+Three actions, used as steps:
 
 | Action | Step | Does |
 | --- | --- | --- |
 | `DavidWells/claude-runner-action@v1` | `timeout-minutes: 50` | Checks the trigger, sets up the repo, runs Claude, opens PRs |
+| `DavidWells/claude-runner-action/labels@v1` | `if:` Claude succeeded | Optional. Creates the label set and labels the Issue/PR |
 | `DavidWells/claude-runner-action/finalize@v1` | `if: always()` | Saves the session, pushes unfinished work, uploads the transcript, updates the status comment |
 
 The split exists because composite actions can't set `timeout-minutes` on their own steps. The caller times out the main step and finalize still runs, so a timed-out run keeps its work and session for the next `@claude`.
@@ -27,10 +28,14 @@ jobs:
       actions: write
       id-token: write
     steps:
-      - uses: DavidWells/claude-runner-action@v1
+      - id: claude
+        uses: DavidWells/claude-runner-action@v1
         timeout-minutes: 50
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - if: steps.claude.outputs.claude-outcome == 'success'
+        uses: DavidWells/claude-runner-action/labels@v1
 
       - if: always()
         uses: DavidWells/claude-runner-action/finalize@v1
@@ -56,6 +61,14 @@ Keep the job `timeout-minutes` above the Claude step's so finalize has time to r
 
 `github-token`, `event-bus-url`, `event-bus-api-key` — same meaning as above.
 
+### labels
+
+`github-token` — same meaning as above.
+
+## Labels
+
+Every labeled Issue/PR gets `claude-code` and `auto-generated`. Whole-word keywords in the trigger text add `security-fix`, `performance`, `technical-debt`, `documentation` and `ci-cd`. Delete the step to opt out.
+
 ## Triggers
 
 A run starts when:
@@ -80,6 +93,10 @@ Mention `fable`, `opus`, `haiku` or `sonnet` in the trigger text to pick a model
 ## How state flows
 
 The main action exports `CLAUDE_RUNNER_*` env vars as it goes; finalize reads them. Claude's outcome is recorded right after the Claude step, so a timeout later in the main step still reports the right outcome. A run that started Claude but never recorded an outcome is treated as failed.
+
+## Logs
+
+Run logs can be public, so `src/` logs codes like `{"code":"claude-workflow.038"}` rather than values. [`src/log-codes.json`](src/log-codes.json) says what each one means.
 
 ## Development
 

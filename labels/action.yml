@@ -1,0 +1,27 @@
+# Labels the triggering Issue/PR after a claude-runner-action run. Optional; call it
+# after the main action with if: steps.<id>.outputs.claude-outcome == 'success'.
+name: 'Claude Runner: labels'
+description: 'Create the Claude label set and apply it to the Issue or PR a Claude Runner run worked on'
+author: 'David Wells'
+branding:
+  icon: 'tag'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'Token for creating and applying labels'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Apply labels
+      if: env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
+      uses: actions/github-script@v7
+      env:
+        ACTION_DIR: ${{ github.action_path }}/..
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          await require(`${process.env.ACTION_DIR}/src/labels.js`).run({ github, context, core })

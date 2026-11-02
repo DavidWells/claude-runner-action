@@ -78,6 +78,7 @@ jobs:
       id-token: write
     steps:
       - name: Run Claude
+        id: claude
         uses: DavidWells/claude-runner-action@v1
         timeout-minutes: 50
         with:
@@ -88,6 +89,10 @@ jobs:
           allowed-bots: 'custom-git-ops'
           event-bus-url: ${{ secrets.EVENT_BUS_URL }}
           event-bus-api-key: ${{ secrets.EVENT_BUS_API_KEY }}
+
+      - name: Label
+        if: steps.claude.outputs.claude-outcome == 'success'
+        uses: DavidWells/claude-runner-action/labels@v1
 
       - name: Finalize
         if: always()
