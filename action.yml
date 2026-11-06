@@ -207,6 +207,8 @@ runs:
           --model ${{ env.CLAUDE_RUNNER_MODEL }} --dangerously-skip-permissions ${{ steps.session.outputs.resume-args }}
         # Dispatch runs use agent mode with the trigger text as prompt; mentions use tag mode
         prompt: ${{ github.event_name == 'workflow_dispatch' && env.CLAUDE_RUNNER_TRIGGER_TEXT || '' }}
+        # PR events default to agent mode, which ignores @claude in the PR body
+        track_progress: ${{ github.event_name == 'pull_request' }}
         # Lets Claude read CI results on PRs
         additional_permissions: |
           actions: read

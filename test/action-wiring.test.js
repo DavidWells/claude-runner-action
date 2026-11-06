@@ -61,6 +61,17 @@ test('template triggers on pull_request, not pull_request_target', () => {
   assert.not.ok('pull_request_target' in doc.on)
 })
 
+test('template only asks for cache write on private repos', () => {
+  const { doc } = load('workflow-templates/claude.yml')
+  assert.is(doc.jobs.claude['cache-mode'], "${{ github.event.repository.private && 'write' || 'read' }}")
+})
+
+test('Claude step forces tag mode for @claude in a PR body', () => {
+  const { doc } = load('action.yml')
+  const step = doc.runs.steps.find((s) => s.id === 'claude')
+  assert.is(step.with.track_progress, "${{ github.event_name == 'pull_request' }}")
+})
+
 test('third-party actions are pinned to a commit SHA', () => {
   for (const file of ACTIONS) {
     const { doc } = load(file)
