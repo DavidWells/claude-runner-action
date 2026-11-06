@@ -61,9 +61,9 @@ test('template triggers on pull_request, not pull_request_target', () => {
   assert.not.ok('pull_request_target' in doc.on)
 })
 
-test('template only asks for cache write on private repos', () => {
+test('template cache-mode is a literal; GitHub rejects expressions there', () => {
   const { doc } = load('workflow-templates/claude.yml')
-  assert.is(doc.jobs.claude['cache-mode'], "${{ github.event.repository.private && 'write' || 'read' }}")
+  assert.is(doc.jobs.claude['cache-mode'], 'write')
 })
 
 test('Claude step forces tag mode for @claude in a PR body', () => {

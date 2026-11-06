@@ -68,9 +68,8 @@ jobs:
     timeout-minutes: 60
     # issues/issue_comment get read-only cache tokens by
     # default; saving the Claude session needs write. The action only saves for
-    # OWNER/MEMBER/COLLABORATOR triggers, limiting poisoning risk. Public repos
-    # never save sessions, so they keep the read-only default
-    cache-mode: ${{ github.event.repository.private && 'write' || 'read' }}
+    # OWNER/MEMBER/COLLABORATOR triggers, limiting poisoning risk
+    cache-mode: write
     permissions:
       contents: write
       pull-requests: write
