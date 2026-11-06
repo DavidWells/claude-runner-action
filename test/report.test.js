@@ -3,7 +3,7 @@
 const { test } = require('uvu')
 const assert = require('uvu/assert')
 const { successComment, failureComment, STATUS_MARKER } = require('../src/comments')
-const { pullRequestBody, jobEvent } = require('../src/auto-pr')
+const { pullRequestBody, jobEvent, claudeResult } = require('../src/auto-pr')
 const { dispatchResultEvent } = require('../src/publish-dispatch')
 
 const base = {
@@ -63,6 +63,35 @@ test('pullRequestBody links issue, actor and run', () => {
   assert.ok(body.includes('*resolves #5*'))
   assert.ok(body.includes('[Claude Code Action - Run #42](https://github.com/o/r/actions/runs/42)'))
   assert.not.ok(body.includes('@claude'))
+  assert.not.ok(body.includes('@copilot'))
+  assert.ok(body.includes('<!-- CLAUDE_ISSUE_RESPONSE start -->\nsummary\n<!-- CLAUDE_ISSUE_RESPONSE end -->'))
+})
+
+const trackingComment = {
+  user: { login: 'github-actions[bot]', type: 'Bot' },
+  body: "**Claude finished @david's task in 11s** —— [View job](https://github.com/o/r/actions/runs/42) • [`claude/issue-5`](https://github.com/o/r/tree/claude/issue-5) • [Create PR ➔](https://github.com/o/r/compare/main...claude/issue-5?quick_pull=1&title=x)\n\n---\n### Added `verify.txt`\n\n- [x] Created `verify.txt`",
+}
+
+test('claudeResult finds the tracking comment posted by any bot and drops the Create PR link', () => {
+  const comments = [
+    { user: { login: 'david', type: 'User' }, body: '@claude add verify.txt' },
+    { user: { login: 'github-actions[bot]', type: 'Bot' }, body: '**ℹ️ Action Run:** x\n\n<!-- claude-run-status -->' },
+    trackingComment,
+  ]
+  const result = claudeResult(comments)
+  assert.ok(result.includes('### Added `verify.txt`'))
+  assert.not.ok(result.includes('Create PR'))
+  assert.not.ok(result.includes('quick_pull'))
+})
+
+test('claudeResult ignores user comments that mention Claude', () => {
+  const comments = [{ user: { login: 'david', type: 'User' }, body: '**Claude finished** looks great' }]
+  assert.is(claudeResult(comments), '')
+})
+
+test('claudeResult uses the last tracking comment', () => {
+  const older = { ...trackingComment, body: '**Claude finished @david\'s task in 5s**\n\n---\nolder result' }
+  assert.ok(claudeResult([older, trackingComment]).includes('verify.txt'))
 })
 
 test('jobEvent shapes claude.job.* events', () => {

@@ -14,20 +14,29 @@ function pullRequestBody({ issueNumber, actor, claudeCommentBody, owner, repo, r
 
 ---
 
+<!-- CLAUDE_ISSUE_RESPONSE start -->
 ${claudeCommentBody}
+<!-- CLAUDE_ISSUE_RESPONSE end -->
 
 **If additional fixes are needed:** Mention \`@ claude\` in a comment on this PR.
 
 *resolves #${issueNumber}*
 
-Please review @copilot
-
-<!-- CLAUDE_ISSUE_RESPONSE start -->
-<!-- CLAUDE_ISSUE_RESPONSE end -->
-
 ---
 *Automated PR by [Claude Code Action - Run #${runId}](https://github.com/${owner}/${repo}/actions/runs/${runId})*
 `
+}
+
+/**
+ * Body of the last tracking comment claude-code-action posted on the Issue,
+ * without its Create PR link. Empty when there is none.
+ * @param {Array<{ user: { login: string, type: string }, body: string }>} comments
+ * @returns {string}
+ */
+function claudeResult(comments) {
+  const tracking = comments.filter((c) => c.user.type === 'Bot' && /^\*\*Claude (finished|encountered)/.test(c.body))
+  const last = tracking[tracking.length - 1]
+  return last ? last.body.replace(/ • \[Create PR ➔\]\([^)]+\)/, '') : ''
 }
 
 /**
@@ -105,8 +114,7 @@ async function run({ github, context, core, branchName, eventBusUrl, eventBusApi
       console.log(JSON.stringify({ code: 'claude-workflow.040' }))
       const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: Number(issueNumber) })
       const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: Number(issueNumber) })
-      const claudeComment = comments.find((/** @type {any} */ c) => c.user.login === 'claude[bot]' && c.body.includes('Claude'))
-      const claudeCommentBody = claudeComment ? claudeComment.body.replace(/\[Create PR ➔\]\([^)]+\)/, '') : ''
+      const claudeCommentBody = claudeResult(comments)
 
       const { data: newPr } = await github.rest.pulls.create({
         owner,
@@ -151,4 +159,4 @@ async function run({ github, context, core, branchName, eventBusUrl, eventBusApi
   }
 }
 
-module.exports = { pullRequestBody, jobEvent, run }
+module.exports = { pullRequestBody, claudeResult, jobEvent, run }
