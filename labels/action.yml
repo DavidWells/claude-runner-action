@@ -18,7 +18,7 @@ runs:
   steps:
     - name: Apply labels
       if: env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}/..
       with:

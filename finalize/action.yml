@@ -72,7 +72,7 @@ runs:
     - name: Upload Claude transcript
       if: always() && steps.outcome.outputs.outcome != 'skipped' && github.event.repository.private == true
       continue-on-error: true
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
       with:
         name: claude-transcript-${{ github.run_id }}-${{ github.run_attempt }}
         path: ~/.claude/projects/*/*.jsonl
@@ -98,7 +98,7 @@ runs:
     - name: Render status comment
       id: comment
       if: always() && env.CLAUDE_RUNNER_STATUS_COMMENT_ID != '' && env.CLAUDE_RUNNER_ISSUE_NUMBER != ''
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}/..
         OUTCOME: ${{ steps.outcome.outputs.outcome }}
@@ -117,7 +117,7 @@ runs:
 
     - name: Update status comment
       if: always() && steps.comment.outputs.comment-body != ''
-      uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4
+      uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
       with:
         token: ${{ inputs.github-token }}
         issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}

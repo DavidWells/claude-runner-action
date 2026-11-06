@@ -51,7 +51,7 @@ runs:
     # Gate
     ######################
     - name: Check trigger
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}
       with:
@@ -61,7 +61,7 @@ runs:
 
     - name: Check dispatch permissions
       if: env.CLAUDE_RUNNER_AUTHORIZED == 'true' && github.event_name == 'workflow_dispatch'
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}
         ALLOWED_USERS: ${{ inputs.allowed-users }}
@@ -72,7 +72,7 @@ runs:
 
     - name: Get context information
       if: env.CLAUDE_RUNNER_AUTHORIZED == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}
       with:
@@ -83,7 +83,7 @@ runs:
     - name: Find existing status comment
       id: find_comment
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch'
-      uses: peter-evans/find-comment@3eae4d37986fb5a8592848f6a574fdf654e61f9e # v3
+      uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4
       with:
         token: ${{ inputs.github-token }}
         issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
@@ -93,7 +93,7 @@ runs:
     - name: Create in-progress status comment
       id: create_comment
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true' && github.event_name != 'workflow_dispatch' && steps.find_comment.outputs.comment-id == ''
-      uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4
+      uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
       with:
         token: ${{ inputs.github-token }}
         issue-number: ${{ env.CLAUDE_RUNNER_ISSUE_NUMBER }}
@@ -113,7 +113,7 @@ runs:
     ######################
     - name: Checkout repository
       if: env.CLAUDE_RUNNER_SHOULD_CONTINUE == 'true'
-      uses: actions/checkout@v4
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       with:
         # The feature branch for PRs, or the default branch for Issues
         ref: ${{ env.CLAUDE_RUNNER_HEAD_SHA || github.ref }}
@@ -275,7 +275,7 @@ runs:
 
     - name: Create or update pull request
       if: steps.check-changes.outputs.has-changes == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
         ACTION_DIR: ${{ github.action_path }}
         BRANCH_NAME: ${{ steps.claude.outputs.branch_name }}
