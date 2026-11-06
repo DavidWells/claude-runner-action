@@ -29,14 +29,17 @@ ${claudeCommentBody}
 
 /**
  * Body of the last tracking comment claude-code-action posted on the Issue,
- * without its Create PR link. Empty when there is none.
+ * without its Create PR link or trailing bullet. Empty when there is none.
  * @param {Array<{ user: { login: string, type: string }, body: string }>} comments
  * @returns {string}
  */
 function claudeResult(comments) {
   const tracking = comments.filter((c) => c.user.type === 'Bot' && /^\*\*Claude (finished|encountered)/.test(c.body))
   const last = tracking[tracking.length - 1]
-  return last ? last.body.replace(/ • \[Create PR ➔\]\([^)]+\)/, '') : ''
+  if (!last) return ''
+  return last.body
+    .replace(/ • \[Create PR ➔\]\(.*\)$/m, '')
+    .replace(/\s*•\s*$/, '')
 }
 
 /**

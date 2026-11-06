@@ -84,6 +84,14 @@ test('claudeResult finds the tracking comment posted by any bot and drops the Cr
   assert.not.ok(result.includes('quick_pull'))
 })
 
+test('claudeResult strips Create PR links with nested parens and the trailing bullet line', () => {
+  const body = "**Claude finished @david's task in 19s** —— [View job](https://x/runs/42) • [`claude/issue-10`](https://x/tree/claude/issue-10) • [Create PR ➔](https://x/compare/main...claude/issue-10?quick_pull=1&body=Generated%20with%20%5BClaude%20Code%5D(https%3A%2F%2Fclaude.ai%2Fcode))\n\n---\n### Summary\nAdded body.txt\n\n\n •"
+  const result = claudeResult([{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }])
+  assert.ok(result.includes('[`claude/issue-10`](https://x/tree/claude/issue-10)\n'))
+  assert.not.ok(result.includes('))'))
+  assert.ok(result.endsWith('Added body.txt'))
+})
+
 test('claudeResult ignores user comments that mention Claude', () => {
   const comments = [{ user: { login: 'david', type: 'User' }, body: '**Claude finished** looks great' }]
   assert.is(claudeResult(comments), '')
