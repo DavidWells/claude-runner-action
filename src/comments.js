@@ -3,7 +3,6 @@
 const STATUS_MARKER = '<!-- claude-run-status -->'
 
 const EVENT_ICONS = {
-  pull_request: '🔀',
   issue_comment: '💬',
   issues: '📋',
   pull_request_review_comment: '📝',

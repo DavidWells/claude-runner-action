@@ -55,21 +55,16 @@ for (const file of ACTIONS) {
   })
 }
 
-test('template triggers on pull_request, not pull_request_target', () => {
+test('template has no PR open/push trigger; bot-made PR events would wait for approval', () => {
   const { doc } = load('workflow-templates/claude.yml')
-  assert.ok('pull_request' in doc.on)
+  assert.not.ok('pull_request' in doc.on)
   assert.not.ok('pull_request_target' in doc.on)
+  assert.not.ok(doc.jobs.claude.if.includes('github.event.pull_request.body'))
 })
 
 test('template cache-mode is a literal; GitHub rejects expressions there', () => {
   const { doc } = load('workflow-templates/claude.yml')
   assert.is(doc.jobs.claude['cache-mode'], 'write')
-})
-
-test('Claude step forces tag mode for @claude in a PR body', () => {
-  const { doc } = load('action.yml')
-  const step = doc.runs.steps.find((s) => s.id === 'claude')
-  assert.is(step.with.track_progress, "${{ github.event_name == 'pull_request' }}")
 })
 
 test('third-party actions are pinned to a commit SHA', () => {

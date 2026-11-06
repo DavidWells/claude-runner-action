@@ -20,9 +20,9 @@ test('workflow_dispatch uses trigger_text with mention', () => {
   assert.equal(ctx, { issueNumber: '', prNumber: '', headRef: '', baseRef: '', headSha: '', isPR: false, triggerText: '@claude do x' })
 })
 
-test('pull_request reads PR fields and body', () => {
-  const ctx = contextFromPayload('pull_request', prPayload)
-  assert.equal(ctx, { issueNumber: '7', prNumber: '7', headRef: 'feat', baseRef: 'main', headSha: 'abc', isPR: true, triggerText: 'pr body' })
+test('pull_request_review_comment reads PR fields and comment body', () => {
+  const ctx = contextFromPayload('pull_request_review_comment', { ...prPayload, comment: { body: '@claude fix line' } })
+  assert.equal(ctx, { issueNumber: '7', prNumber: '7', headRef: 'feat', baseRef: 'main', headSha: 'abc', isPR: true, triggerText: '@claude fix line' })
 })
 
 test('issues joins title and body', () => {

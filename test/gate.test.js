@@ -12,26 +12,9 @@ test('workflow_dispatch needs trigger_text and actor', () => {
   assert.is(isAuthorizedTrigger('workflow_dispatch', { inputs: { trigger_text: 'x', actor: '' } }, OWNER), false)
 })
 
-test('pull_request: same-repo only, @claude in body, no artifact marker', () => {
-  const pr = (over) => ({
-    pull_request: {
-      head: { repo: { full_name: 'DavidWells/x' } },
-      author_association: 'NONE',
-      body: 'please @claude fix',
-      ...over,
-    },
-    repository: { full_name: 'DavidWells/x' },
-  })
-  assert.is(isAuthorizedTrigger('pull_request', pr({}), OWNER), true)
-  assert.is(isAuthorizedTrigger('pull_request', pr({ head: { repo: { full_name: 'evil/x' } } }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request', pr({ head: { repo: { full_name: 'evil/x' } }, author_association: 'COLLABORATOR' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request', pr({ body: 'no mention' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request', pr({ body: '@claude <!-- claude-dispatch-artifact -->' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request', pr({ body: null }), OWNER), false)
-})
-
-test('pull_request_target is not a trigger', () => {
+test('pull_request and pull_request_target are not triggers', () => {
   const payload = { pull_request: { head: { repo: { full_name: 'DavidWells/x' } }, body: '@claude fix' }, repository: { full_name: 'DavidWells/x' } }
+  assert.is(isAuthorizedTrigger('pull_request', payload, OWNER), false)
   assert.is(isAuthorizedTrigger('pull_request_target', payload, OWNER), false)
 })
 

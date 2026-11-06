@@ -35,14 +35,6 @@ function isAuthorizedTrigger(eventName, payload, repoOwner) {
     case 'workflow_dispatch':
       return Boolean(payload.inputs?.trigger_text) && Boolean(payload.inputs?.actor)
 
-    case 'pull_request': {
-      const pr = payload.pull_request || {}
-      const sameRepo = pr.head?.repo?.full_name === payload.repository?.full_name
-      return sameRepo &&
-        contains(pr.body, '@claude') &&
-        !contains(pr.body, ARTIFACT_MARKER)
-    }
-
     case 'issue_comment': {
       const comment = payload.comment || {}
       return (isOwner || sender === 'github-actions[bot]' || isTrusted(comment.author_association)) &&

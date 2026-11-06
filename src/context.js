@@ -49,8 +49,6 @@ function contextFromPayload(eventName, payload) {
   switch (eventName) {
     case 'workflow_dispatch':
       return { ...empty, triggerText: ensureMention(payload.inputs.trigger_text) }
-    case 'pull_request':
-      return fromPullRequest(payload.pull_request, payload.pull_request.body)
     case 'issues':
       return { ...empty, issueNumber: String(payload.issue.number), triggerText: `${payload.issue.title} ${payload.issue.body}` }
     case 'issue_comment':
