@@ -35,7 +35,7 @@ function isAuthorizedTrigger(eventName, payload, repoOwner) {
     case 'workflow_dispatch':
       return Boolean(payload.inputs?.trigger_text) && Boolean(payload.inputs?.actor)
 
-    case 'pull_request_target': {
+    case 'pull_request': {
       const pr = payload.pull_request || {}
       const sameRepo = pr.head?.repo?.full_name === payload.repository?.full_name
       return sameRepo &&

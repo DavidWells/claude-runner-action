@@ -55,6 +55,12 @@ for (const file of ACTIONS) {
   })
 }
 
+test('template triggers on pull_request, not pull_request_target', () => {
+  const { doc } = load('workflow-templates/claude.yml')
+  assert.ok('pull_request' in doc.on)
+  assert.not.ok('pull_request_target' in doc.on)
+})
+
 test('third-party actions are pinned to a commit SHA', () => {
   for (const file of ACTIONS) {
     const { doc } = load(file)

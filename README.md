@@ -76,7 +76,7 @@ A run starts when:
 - **workflow_dispatch** with `trigger_text` and `actor`. With `create_branch`, changes go to `claude/dispatch-<run_id>` and open a PR. `notify_email`/`in_reply_to`/`notify_subject` publish a result receipt to the event bus.
 - **issues** mention `@claude` and the issue's author is an `OWNER`/`MEMBER`/`COLLABORATOR`.
 - **issue_comment / PR review (comment)** mention `@claude` and the sender is the repo owner or an `OWNER`/`MEMBER`/`COLLABORATOR`.
-- **pull_request_target** body mentions `@claude` and the PR is same-repo.
+- **pull_request** body mentions `@claude` and the PR is same-repo.
 
 Bodies stamped `claude-dispatch-artifact` never trigger, so PRs Claude opens don't re-trigger it. Issues that already have a linked PR are skipped.
 

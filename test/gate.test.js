@@ -12,7 +12,7 @@ test('workflow_dispatch needs trigger_text and actor', () => {
   assert.is(isAuthorizedTrigger('workflow_dispatch', { inputs: { trigger_text: 'x', actor: '' } }, OWNER), false)
 })
 
-test('pull_request_target: same-repo only, @claude in body, no artifact marker', () => {
+test('pull_request: same-repo only, @claude in body, no artifact marker', () => {
   const pr = (over) => ({
     pull_request: {
       head: { repo: { full_name: 'DavidWells/x' } },
@@ -22,12 +22,17 @@ test('pull_request_target: same-repo only, @claude in body, no artifact marker',
     },
     repository: { full_name: 'DavidWells/x' },
   })
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({}), OWNER), true)
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({ head: { repo: { full_name: 'evil/x' } } }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({ head: { repo: { full_name: 'evil/x' } }, author_association: 'COLLABORATOR' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({ body: 'no mention' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({ body: '@claude <!-- claude-dispatch-artifact -->' }), OWNER), false)
-  assert.is(isAuthorizedTrigger('pull_request_target', pr({ body: null }), OWNER), false)
+  assert.is(isAuthorizedTrigger('pull_request', pr({}), OWNER), true)
+  assert.is(isAuthorizedTrigger('pull_request', pr({ head: { repo: { full_name: 'evil/x' } } }), OWNER), false)
+  assert.is(isAuthorizedTrigger('pull_request', pr({ head: { repo: { full_name: 'evil/x' } }, author_association: 'COLLABORATOR' }), OWNER), false)
+  assert.is(isAuthorizedTrigger('pull_request', pr({ body: 'no mention' }), OWNER), false)
+  assert.is(isAuthorizedTrigger('pull_request', pr({ body: '@claude <!-- claude-dispatch-artifact -->' }), OWNER), false)
+  assert.is(isAuthorizedTrigger('pull_request', pr({ body: null }), OWNER), false)
+})
+
+test('pull_request_target is not a trigger', () => {
+  const payload = { pull_request: { head: { repo: { full_name: 'DavidWells/x' } }, body: '@claude fix' }, repository: { full_name: 'DavidWells/x' } }
+  assert.is(isAuthorizedTrigger('pull_request_target', payload, OWNER), false)
 })
 
 test('issue_comment: owner, github-actions bot or trusted association', () => {
